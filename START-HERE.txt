@@ -1,0 +1,6 @@
+project/              Gleam + Lustre REPL (gleam.toml, src/, web/, index.html, README.md)
+demo-page.html        One-file page: the compiled REPL plus a Web Audio stand-in engine
+antigravity-prompt.md Prompt for fixing the C ands parser (patches embedded)
+ands-defer-space.patch, ands-sigil-fix.patch   The two C patches (already committed upstream as 66fdde3)
+
+Build:  cd project && gleam build && gleam run -m skode_check

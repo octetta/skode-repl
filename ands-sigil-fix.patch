@@ -1,0 +1,110 @@
+--- a/parts/ands.c	2026-11-14 06:39:49.992984841 +0000
++++ b/parts/ands.c	2026-11-14 08:24:41.021771541 +0000
+@@ -854,6 +854,8 @@
+                         if (s->data && s->data_len < s->data_cap)
+                             s->data[s->data_len++] = val;
+                         ptr--;
++                    } else {
++                        ptr--;   /* bare '$': reprocess the next character */
+                     }
+                 } else if (IS_STREAM(*ptr)) {
+                     if (s->num.len > 0) {
+@@ -862,12 +864,14 @@
+                         buffer_clear(&s->num);
+                     }
+                     ptr++;
+-                    if (ptr < end && (isdigit((unsigned char)*ptr) || isalpha((unsigned char)*ptr))) {
++                    if (ptr < end && isdigit((unsigned char)*ptr)) {
+                         int stream = ands_var_parse(&ptr, end);
+                         double val = ands_stream_pull(s, stream);
+                         if (s->data && s->data_len < s->data_cap)
+                             s->data[s->data_len++] = val;
+                         ptr--;
++                    } else {
++                        ptr--;   /* bare '&': reprocess the next character */
+                     }
+                 } else if (IS_SEPARATOR(*ptr)) {
+                     if (s->num.len > 0) {
+@@ -895,7 +899,7 @@
+ 
+             
+             case GET_STREAM:
+-                if (isdigit(*ptr) || isalpha(*ptr)) {
++                if (isdigit(*ptr)) {
+                     int stream = ands_var_parse(&ptr, end);
+                     if (s->arg_len < s->arg_cap) {
+                         s->arg[s->arg_len] = 0.0;
+@@ -996,12 +1000,13 @@
+                     } else {
+                         s->defer_num = 0.0;
+                         s->defer_var = -1;
++                        ptr--;   /* bare sigil: reprocess the next character */
+                     }
+                     buffer_clear(&s->num);
+                     s->state = GET_DEFER_STRING;
+                 } else if (IS_STREAM(*ptr)) {
+                     ptr++;
+-                    if (ptr < end && (isdigit((unsigned char)*ptr) || isalpha((unsigned char)*ptr))) {
++                    if (ptr < end && isdigit((unsigned char)*ptr)) {
+                         int stream = ands_var_parse(&ptr, end);
+                         s->defer_num = ands_defer_time_clamp(ands_stream_pull(s, stream));
+                         s->defer_var = stream | ANDS_STREAM_FLAG;
+@@ -1009,6 +1014,7 @@
+                     } else {
+                         s->defer_num = 0.0;
+                         s->defer_var = -1;
++                        ptr--;   /* bare sigil: reprocess the next character */
+                     }
+                     buffer_clear(&s->num);
+                     s->state = GET_DEFER_STRING;
+--- a/parts/tests/ands_parser_tests.c	2026-11-14 11:40:41.133232830 +0000
++++ b/parts/tests/ands_parser_tests.c	2026-11-14 11:40:41.179341379 +0000
+@@ -546,6 +546,40 @@
+   if (r.len > 1 && r.events[1].defer_var != 2) fail(test, "+ $2 lost variable provenance");
+   if (r.len > 3 && r.events[3].defer_var != 4) fail(test, "~ $4 lost variable provenance");
+ }
++
++static void test_stream_variable_sigil_edges(void) {
++  const char *test = "bare $ / & sigils";
++  recorder_t r;
++
++  /* '&' needs digits (ands_var_parse only reads digits); a letter is not a stream */
++  char a[] = "f &x;";
++  run_parse(test, a, &r);
++  expect_event(test, &r, 0, FUNCTION, "f---");
++  if (r.len > 0 && r.events[0].argc != 0) fail(test, "\"f &x\" must not gain a phantom argument");
++  expect_event(test, &r, 1, FUNCTION, "x---");
++
++  /* a bare sigil in an array must not swallow the next character */
++  char b[] = "( 1 &a 3 ) vt;";
++  run_parse(test, b, &r);
++  expect_event(test, &r, 0, GOT_ARRAY, "----");
++  if (r.len > 0 && r.events[0].argc != 3) fail(test, "\"( 1 &a 3 )\" should hold 3 values");
++
++  char c[] = "( 1 $xy 3 ) vt;";
++  run_parse(test, c, &r);
++  expect_event(test, &r, 0, GOT_ARRAY, "----");
++  if (r.len > 0 && r.events[0].argc != 3) fail(test, "\"( 1 $xy 3 )\" should hold 3 values");
++
++  /* a bare sigil in a defer must not swallow the first body character */
++  char d[] = "+&x v0;";
++  run_parse(test, d, &r);
++  expect_event(test, &r, 1, DEFER, "----");
++  if (r.len > 1 && strcmp(r.events[1].text, "x v0") != 0) fail(test, "\"+&x v0\" body should be \"x v0\"");
++
++  char e[] = "+$v0 a10;";
++  run_parse(test, e, &r);
++  expect_event(test, &r, 1, DEFER, "----");
++  if (r.len > 1 && strcmp(r.events[1].text, "v0 a10") != 0) fail(test, "\"+$v0 a10\" body should be \"v0 a10\"");
++}
+ int main(void) {
+   test_compact_commands();
+   test_strings_and_arrays();
+@@ -555,6 +589,7 @@
+   test_defer();
+   test_defer_space();
+   test_defer_space_streams();
++  test_stream_variable_sigil_edges();
+   test_variable_provenance();
+   test_stream_defer();
+   test_arrays_with_variables_and_streams();
