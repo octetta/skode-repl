@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Skred REPL (Gleam + Lustre)</title>
+<script src="coi-serviceworker.min.js"></script>
 <style>
   :root { --bg:#14161a; --panel:#1c1f25; --fg:#d7dae0; --dim:#7d8590; --echo:#7cc4ff; --accent:#ffb454; }
   html, body { height:100%; margin:0; background:var(--bg); color:var(--fg); }
@@ -39,10 +40,15 @@
 
 <!-- Emscripten engine glue: gives globalThis.Module (fetched by ./fetch-wasm.sh) -->
 <script src="skred_api.js"></script>
-<!-- Gleam build output (gleam build) -->
+<!-- Gleam + Lustre application -->
+<script type="module" src="app.js"></script>
 <script type="module">
-  import { main } from "./build/dev/javascript/skred_repl/skred_repl.mjs";
-  main();
+  // Fallback for unbundled development builds if app.js is not present
+  if (!globalThis.skodePlan) {
+    import("./build/dev/javascript/skred_repl/skred_repl.mjs")
+      .then(m => m.main())
+      .catch(() => {});
+  }
 </script>
 </body>
 </html>

@@ -1,0 +1,142 @@
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Skred WASM version (leave blank for latest or WASM_VERSION.txt)"
+        required: false
+        default: ""
+  repository_dispatch:
+    types:
+      - pulp_release
+      - pulp_update
+  schedule:
+    # Check twice daily for new pulp releases (00:00 and 12:00 UTC)
+    - cron: '0 0,12 * * *'
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build & Test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Erlang & Gleam
+        uses: erlef/setup-beam@v1
+        with:
+          otp-version: "27"
+          gleam-version: "latest"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Determine Skred WASM version
+        id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+          CURRENT_VERSION=$(tr -d '[:space:]' < project/WASM_VERSION.txt)
+          INPUT_VERSION="${{ github.event.inputs.version }}"
+          PAYLOAD_VERSION="${{ github.event.client_payload.version }}"
+
+          if [ -n "$INPUT_VERSION" ]; then
+            TARGET_VERSION="${INPUT_VERSION#v}"
+            echo "Using manual input version: $TARGET_VERSION"
+          elif [ -n "$PAYLOAD_VERSION" ]; then
+            TARGET_VERSION="${PAYLOAD_VERSION#v}"
+            echo "Using dispatch payload version: $TARGET_VERSION"
+          else
+            echo "Querying latest release from octetta/pulp..."
+            LATEST_TAG=$(curl -sSL "https://api.github.com/repos/octetta/pulp/releases/latest" | jq -r '.tag_name // empty')
+            if [ -n "$LATEST_TAG" ]; then
+              TARGET_VERSION="${LATEST_TAG#v}"
+              echo "Detected latest pulp release: $TARGET_VERSION"
+            else
+              TARGET_VERSION="$CURRENT_VERSION"
+              echo "Using pinned version: $TARGET_VERSION"
+            fi
+          fi
+
+          echo "target_version=$TARGET_VERSION" >> "$GITHUB_OUTPUT"
+          echo "current_version=$CURRENT_VERSION" >> "$GITHUB_OUTPUT"
+
+          if [ "$TARGET_VERSION" != "$CURRENT_VERSION" ]; then
+            echo "version_changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "version_changed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Fetch Skred WASM assets
+        shell: bash
+        env:
+          VERSION: ${{ steps.version.outputs.target_version }}
+        run: |
+          set -euo pipefail
+          echo "Fetching Skred WASM v${VERSION}..."
+          curl -fL -o wasm.zip "https://github.com/octetta/pulp/releases/download/v${VERSION}/skred-${VERSION}-maxed-wasm.zip"
+          unzip -o wasm.zip "skred-${VERSION}-maxed/*"
+          mv skred-${VERSION}-maxed/skred_api.* project/
+          rm -rf "skred-${VERSION}-maxed" wasm.zip
+          test -s project/skred_api.wasm
+          echo "$VERSION" > project/WASM_VERSION.txt
+
+      - name: Run Gleam checks and tests
+        run: |
+          cd project
+          gleam deps download
+          gleam run -m skode_check
+          gleam run -m complete_check
+          gleam run -m view_check
+
+      - name: Build and Bundle Web App
+        run: |
+          cd project
+          gleam build --target javascript
+          npx esbuild web/entry.mjs --bundle --minify --format=esm --outfile=app.js
+          mkdir -p ../dist
+          cp index.html coi-serviceworker.min.js skred_api.js skred_api.wasm app.js ../dist/
+
+      - name: Commit version bump if updated
+        if: steps.version.outputs.version_changed == 'true' && (github.event_name == 'schedule' || github.event_name == 'repository_dispatch')
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add project/WASM_VERSION.txt
+          git commit -m "chore: bump Skred WASM to v${{ steps.version.outputs.target_version }}" || exit 0
+          git push origin main || echo "Push skipped or branch protected"
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: "./dist"
+
+  deploy:
+    name: Deploy to GitHub Pages
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
