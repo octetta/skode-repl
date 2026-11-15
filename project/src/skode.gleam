@@ -656,6 +656,7 @@ fn typed(cmd: Command, fs: List(Float)) -> Op {
     "B", [a], None, None -> Loop(a != 0.0)
     "fb", [a], None, None -> Bend(a)
     "fbp", [a], None, None -> with_int(cmd, a, BendRange)
+    "g", [], None, None -> Glide(0.0, None)
     "g", [t], None, None -> Glide(t, None)
     "g", [t, c], None, None -> with_int(cmd, c, fn(ci) { Glide(t, Some(ci)) })
     "s", [t], None, None -> Slew(t, None)

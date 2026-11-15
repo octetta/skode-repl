@@ -48,6 +48,7 @@ pub fn main() {
       skode.MasterPattern(127), skode.PatternSpeed(6),
     ]),
     check("M both forms", ops("M125,96") == ops("M 125 96"), True),
+    check("bare g clears glide", ops("g"), [skode.Glide(0.0, None)]),
     check("one step behind: 8 args max", ops("DL 1 2 3 4 5 6 7 8 9"), [
       Generic(Command("DL", [num(1.0), num(2.0), num(3.0), num(4.0), num(5.0), num(6.0), num(7.0), num(8.0)], None, None)),
     ]),
@@ -141,6 +142,9 @@ pub fn main() {
     roundtrip("macro", "[play]: v0 s0.002,1 l1 y0 z1 y127 z1;"),
     roundtrip("array + comment", "/SS 0 ( 1 - . 3 ) # note"),
     roundtrip("spaced defer", "~ 1.5 f 440\n+ -3 n57,12 l1"),
+    roundtrip("bare g", "g"),
+    roundtrip("envelope 2-arg and flat", "t0.01,0.05 t"),
+    roundtrip("links G, H, HS", "G ( 1 2 ) H ( 3 ) HS ( 0 1 2 )"),
     roundtrip("clock", "M 125 96\nA5,0.025,0.975 /cex 0,4,0 ce 127"),
   ]
   let failed = list.filter(results, fn(r) { !r }) |> list.length
