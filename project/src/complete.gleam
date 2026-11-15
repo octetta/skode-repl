@@ -57,7 +57,10 @@ const templates = [
 pub fn split_last_word(input: String) -> #(String, String) {
   let rev = string.to_graphemes(input) |> list.reverse
   let #(word_rev, base_rev) = list.split_while(rev, fn(c) { c != " " })
-  #(string.concat(list.reverse(base_rev)), string.concat(list.reverse(word_rev)))
+  #(
+    string.concat(list.reverse(base_rev)),
+    string.concat(list.reverse(word_rev)),
+  )
 }
 
 /// Templates that start with `word`. Empty word completes nothing.

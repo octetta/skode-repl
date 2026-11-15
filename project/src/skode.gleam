@@ -25,6 +25,14 @@ import gleam/option.{type Option, None, Some}
 import gleam/result
 import gleam/string
 
+// ---- Versions ----
+
+/// Version of the Skode AST & parsing package.
+pub const version = "0.1.0"
+
+/// Upstream Pulp / Skred audio engine release version this AST aligns with.
+pub const pulp_version = "0.84.0"
+
 // ---- Types ----
 
 pub type Num {
@@ -140,7 +148,10 @@ fn is_chunk_end(c: Int) -> Bool {
 
 fn is_atom_char(c: Int) -> Bool {
   is_alpha(c)
-  || list.contains([33, 37, 94, 42, 95, 61, 58, 34, 39, 60, 62, 63, 47, 92, 124, 96], c)
+  || list.contains(
+    [33, 37, 94, 42, 95, 61, 58, 34, 39, 60, 62, 63, 47, 92, 124, 96],
+    c,
+  )
 }
 
 type Class {
@@ -313,7 +324,11 @@ fn take_var(cs: List(Int)) -> #(Option(Int), List(Int)) {
   }
 }
 
-fn take_digits(cs: List(Int), n: Int, acc: List(Int)) -> #(List(Int), List(Int)) {
+fn take_digits(
+  cs: List(Int),
+  n: Int,
+  acc: List(Int),
+) -> #(List(Int), List(Int)) {
   case n, cs {
     0, _ -> #(list.reverse(acc), cs)
     _, [c, ..rest] ->

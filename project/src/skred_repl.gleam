@@ -6,6 +6,7 @@ import complete
 import gleam/dynamic/decode
 import gleam/int
 import gleam/list
+import gleam/option
 import gleam/string
 import lustre
 import lustre/attribute
@@ -13,7 +14,6 @@ import lustre/effect.{type Effect}
 import lustre/element.{type Element}
 import lustre/element/html
 import lustre/event
-import gleam/option
 import skode.{type Op}
 
 // ---- FFI ------------------------------------------------------------------
@@ -94,8 +94,10 @@ fn after() -> Effect(Msg) {
 
 pub fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
   case msg {
-    Typed(text) ->
-      #(Model(..model, input: text, pos: -1, comp: NoCompletion), effect.none())
+    Typed(text) -> #(
+      Model(..model, input: text, pos: -1, comp: NoCompletion),
+      effect.none(),
+    )
 
     Toggle ->
       case model.running {
@@ -178,7 +180,13 @@ pub fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
             _ -> model.draft
           }
           #(
-            Model(..model, input: cmd, pos: next, draft: draft, comp: NoCompletion),
+            Model(
+              ..model,
+              input: cmd,
+              pos: next,
+              draft: draft,
+              comp: NoCompletion,
+            ),
             effect.none(),
           )
         }
@@ -246,7 +254,11 @@ fn key_decoder() -> decode.Decoder(event.Handler(Msg)) {
     "Enter" | "ArrowUp" | "ArrowDown" -> True
     _ -> False
   }
-  decode.success(event.handler(Key(key), prevent_default: block, stop_propagation: False))
+  decode.success(event.handler(
+    Key(key),
+    prevent_default: block,
+    stop_propagation: False,
+  ))
 }
 
 fn view_completions(comp: Completion) -> Element(Msg) {
