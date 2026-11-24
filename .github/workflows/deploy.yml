@@ -12,6 +12,8 @@ on:
         default: ""
   repository_dispatch:
     types:
+      - sk3_release
+      - sk3_update
       - pulp_release
       - pulp_update
   schedule:
